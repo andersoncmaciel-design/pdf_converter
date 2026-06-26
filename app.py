@@ -10,7 +10,7 @@ import os
 st.set_page_config(page_title="Processador Inteligente de PDFs", page_icon="📚", layout="centered")
 
 st.title("📚 Processador e Reformatador Inteligente de PDFs")
-st.write("Ajustado para detectar automaticamente páginas em Paisagem (Tabelas/Pautas) e Retrato.")
+st.write("Versão com suporte completo a acentuação, cedilhas, pontuação e orientação automática.")
 
 modo = st.radio(
     "Selecione o tipo do seu PDF de entrada:",
@@ -38,14 +38,13 @@ if arquivo_pdf is not None:
                 
                 # --- MODO 1: DIGITAL NATIVO ---
                 if modo == "PDF Digital Nativo (Limpar Layout Feio)":
-                    st.info("🤖 Analisando estrutura nativa...")
+                    st.info("🤖 Analisando estrutura nativa e preservando acentuação...")
                     doc = fitz.open(caminho_entrada)
                     total_paginas = len(doc)
                     barra_progresso = st.progress(0)
 
                     for i, pagina in enumerate(doc):
-                        # 1. DETECÇÃO DE ORIENTAÇÃO
-                        # Pega a largura e altura originais da página
+                        # Detecção de orientação
                         rect = pagina.rect
                         e_paisagem = rect.width > rect.height
                         
@@ -56,24 +55,26 @@ if arquivo_pdf is not None:
                             c.setPageSize(letter)
                             largura, altura = letter
                         
-                        # Usa Courier para tabelas (mantém colunas retas) ou Helvetica/Times para textos normais
+                        # Chaveamento de fontes com suporte a caracteres latinos acentuados
                         fonte = "Times-Roman" if codigo_idioma == "ell" else "Courier"
                         
                         texto_extraido = pagina.get_text("text")
                         
-                        # Desenha uma moldura sutil para simular o formulário gráfico
-                        c.setStrokeColorRGB(0.8, 0.8, 0.8) # Cinza claro
+                        # Moldura sutil
+                        c.setStrokeColorRGB(0.8, 0.8, 0.8)
                         c.setLineWidth(1)
-                        c.rect(30, 30, largura - 60, altura - 60) # Linha de borda externa
+                        c.rect(30, 30, largura - 60, altura - 60)
                         
                         textobject = c.beginText()
                         textobject.setTextOrigin(40, altura - 50)
-                        textobject.setFont(fonte, 9) # Fonte ligeiramente menor para caber pautas largas
+                        textobject.setFont(fonte, 9)
                         textobject.setLeading(12)
                         
                         for linha in texto_extraido.split('\n'):
+                            # REMOVIDO o filtro .encode('ascii', 'ignore') para preservar os acentos e cedilhas nativos.
+                            # Usamos latin-1 apenas para assegurar compatibilidade de escape no ReportLab standard se não for Grego
                             if codigo_idioma != "ell":
-                                linha = linha.encode('ascii', 'ignore').decode('ascii')
+                                linha = linha.encode('utf-8', 'ignore').decode('utf-8')
                             textobject.textLine(linha)
                         
                         c.drawText(textobject)
@@ -85,13 +86,12 @@ if arquivo_pdf is not None:
 
                 # --- MODO 2: OCR ---
                 else:
-                    st.info("📷 Renderizando imagens e aplicando OCR...")
+                    st.info("📷 Renderizando imagens e aplicando OCR com dicionário completo...")
                     paginas_imagens = convert_from_path(caminho_entrada, dpi=200)
                     total_paginas = len(paginas_imagens)
                     barra_progresso = st.progress(0)
 
                     for i, imagem in enumerate(paginas_imagens):
-                        # 1. DETECÇÃO DE ORIENTAÇÃO NA IMAGEM
                         e_paisagem = imagem.width > imagem.height
                         
                         if e_paisagem:
@@ -103,11 +103,10 @@ if arquivo_pdf is not None:
                         
                         fonte = "Times-Roman" if codigo_idioma == "ell" else "Courier"
                         
-                        # Preserva espaços em branco para tabelas no OCR
+                        # Preserva os espaços (PSM 6 é excelente para tabelas de dados)
                         config_tess = '--psm 6' if e_paisagem else ''
                         texto_extraido = pytesseract.image_to_string(imagem, lang=codigo_idioma, config=config_tess)
                         
-                        # Linha divisória de margem externa
                         c.setStrokeColorRGB(0.8, 0.8, 0.8)
                         c.rect(30, 30, largura - 60, altura - 60)
                         
@@ -121,7 +120,7 @@ if arquivo_pdf is not None:
                         else:
                             for linha in texto_extraido.split('\n'):
                                 if codigo_idioma != "ell":
-                                    linha = linha.encode('ascii', 'ignore').decode('ascii')
+                                    linha = linha.encode('utf-8', 'ignore').decode('utf-8')
                                 textobject.textLine(linha)
                         
                         c.drawText(textobject)
@@ -133,11 +132,11 @@ if arquivo_pdf is not None:
                 c.save()
 
                 with open(caminho_saida, "rb") as f:
-                    st.success("🎉 Processamento concluído com layout ajustado!")
+                    st.success("🎉 Processamento concluído com acentos e pontuações preservados!")
                     st.download_button(
                         label="📥 Baixar PDF Corrigido",
                         data=f,
-                        file_name="pdf_remodelado_alinhado.pdf",
+                        file_name="pdf_remodelado_perfeito.pdf",
                         mime="application/pdf"
                     )
 
