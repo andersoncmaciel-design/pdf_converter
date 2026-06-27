@@ -4,13 +4,41 @@ import pytesseract
 import fitz  # PyMuPDF
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 import tempfile
 import os
+import urllib.request
 
 st.set_page_config(page_title="Processador Inteligente de PDFs", page_icon="📚", layout="centered")
 
 st.title("📚 Processador e Reformatador Inteligente de PDFs")
-st.write("Versão com suporte completo a acentuação, cedilhas, pontuação e orientação automática.")
+st.write("Versão Híbrida Profissional com Suporte Automatizado a Fontes Gregas e Internacionais.")
+
+# --- FUNÇÃO PARA INSTALAR A FONTE GREGA AUTOMATICAMENTE ---
+@st.cache_resource
+def baixar_e_registrar_fonte_unicode():
+    """Baixa a fonte DejaVuSans (suporta Grego, Acentos e Símbolos) e registra no sistema"""
+    nome_fonte = "DejaVuSans.ttf"
+    # URL confiável da fonte open-source DejaVu Sans
+    url_fonte = "https://github.com/matthieam/reportlab/raw/master/src/reportlab/fonts/DejaVuSans.ttf"
+    
+    if not os.path.exists(nome_fonte):
+        try:
+            with st.spinner("📥 Instalando suporte a caracteres internacionais/grego no servidor..."):
+                urllib.request.urlretrieve(url_fonte, nome_fonte)
+        except Exception as e:
+            st.error(f"Erro ao baixar fonte internacional: {e}")
+            return "Helvetica" # Fallback se falhar a internet
+            
+    try:
+        pdfmetrics.registerFont(TTFont('DejaVuSans', nome_fonte))
+        return 'DejaVuSans'
+    except Exception as e:
+        return "Helvetica"
+
+# Garante que a fonte está pronta para o ReportLab usar
+FONTE_UNICODE = baixar_e_registrar_fonte_unicode()
 
 modo = st.radio(
     "Selecione o tipo do seu PDF de entrada:",
@@ -36,27 +64,12 @@ if arquivo_pdf is not None:
             try:
                 c = canvas.Canvas(caminho_saida)
                 
-                # --- MODO 1: DIGITAL NATIVO (COM SUPORTE A FONTES UNICODE/GREGO) ---
+                # Definir a fonte base com base no idioma (Tabelas latinas usam Courier, Grego usa DejaVu)
+                fonte_aplicada = FONTE_UNICODE if codigo_idioma == "ell" else "Courier"
+                
+                # --- MODO 1: DIGITAL NATIVO ---
                 if modo == "PDF Digital Nativo (Limpar Layout Feio)":
-                    st.info("🤖 Analisando estrutura nativa (Processamento Unicode Avançado)...")
-                    
-                    # 1. REGISTRAR FONTE UNICODE EXTERNA (Crucial para Grego)
-                    # Tentamos carregar uma fonte que suporte caracteres não-latinos.
-                    # Se você rodar localmente no Windows, pode usar 'arial.ttf'. 
-                    # Na nuvem (Linux), usaremos uma fonte padrão do sistema ou uma baixada na mesma pasta.
-                    from reportlab.pdfbase import pdfmetrics
-                    from reportlab.pdfbase.ttfonts import TTFont
-                    
-                    try:
-                        # Se você colocar o arquivo 'DejaVuSans.ttf' ou 'Arial.ttf' na mesma pasta do script, ele usa aqui.
-                        # Caso contrário, tentará buscar no sistema operacional.
-                        pdfmetrics.registerFont(TTFont('UnicodeFont', 'DejaVuSans.ttf'))
-                        fonte_final = 'UnicodeFont'
-                    except:
-                        # Fallback seguro caso não ache a fonte externa (avisa na interface)
-                        st.warning("⚠️ Nota: Para renderizar o Grego perfeitamente na nuvem, adicione o arquivo 'DejaVuSans.ttf' na pasta do projeto.")
-                        fonte_final = "Times-Roman" if codigo_idioma == "ell" else "Courier"
-
+                    st.info("🤖 Organizando blocos de parágrafos nativos...")
                     doc = fitz.open(caminho_entrada)
                     total_paginas = len(doc)
                     barra_progresso = st.progress(0)
@@ -72,26 +85,22 @@ if arquivo_pdf is not None:
                             c.setPageSize(letter)
                             largura, altura = letter
                         
-                        # Moldura sutil
                         c.setStrokeColorRGB(0.8, 0.8, 0.8)
                         c.rect(30, 30, largura - 60, altura - 60)
                         
                         textobject = c.beginText()
                         textobject.setTextOrigin(40, altura - 50)
-                        textobject.setFont(fonte_final, 9)
-                        textobject.setLeading(14) # Aumentado o espaçamento para melhor leitura de parágrafos
+                        textobject.setFont(fonte_aplicada, 9)
+                        textobject.setLeading(14)
                         
-                        # MUDANÇA CHAVE: Extração por blocos estruturados (limpa o OCR quebrado de fundo)
+                        # Extração inteligente por blocos de texto (corrige as quebras do OCR antigo)
                         blocos = pagina.get_text("blocks")
-                        # Ordena os blocos de cima para baixo, da esquerda para a direita
                         blocos.sort(key=lambda b: (b[1], b[0])) 
                         
                         for bloco in blocos:
-                            texto_bloco = bloco[4] # O texto bruto do parágrafo fica na posição 4
-                            
+                            texto_bloco = bloco[4]
                             for linha in texto_bloco.split('\n'):
                                 if linha.strip():
-                                    # Para o Grego rodar perfeitamente, NUNCA mude para ascii
                                     textobject.textLine(linha.strip())
                         
                         c.drawText(textobject)
@@ -103,7 +112,7 @@ if arquivo_pdf is not None:
 
                 # --- MODO 2: OCR ---
                 else:
-                    st.info("📷 Renderizando imagens e aplicando OCR com dicionário completo...")
+                    st.info("📷 Executando reconhecimento óptico avançado...")
                     paginas_imagens = convert_from_path(caminho_entrada, dpi=200)
                     total_paginas = len(paginas_imagens)
                     barra_progresso = st.progress(0)
@@ -118,9 +127,6 @@ if arquivo_pdf is not None:
                             c.setPageSize(letter)
                             largura, altura = letter
                         
-                        fonte = "Times-Roman" if codigo_idioma == "ell" else "Courier"
-                        
-                        # Preserva os espaços (PSM 6 é excelente para tabelas de dados)
                         config_tess = '--psm 6' if e_paisagem else ''
                         texto_extraido = pytesseract.image_to_string(imagem, lang=codigo_idioma, config=config_tess)
                         
@@ -129,16 +135,15 @@ if arquivo_pdf is not None:
                         
                         textobject = c.beginText()
                         textobject.setTextOrigin(40, altura - 50)
-                        textobject.setFont(fonte, 9)
-                        textobject.setLeading(12)
+                        textobject.setFont(fonte_aplicada, 9)
+                        textobject.setLeading(13)
                         
                         if not texto_extraido.strip():
                             textobject.textLine(f"[Nenhum texto detectado na página {i+1}]")
                         else:
                             for linha in texto_extraido.split('\n'):
-                                if codigo_idioma != "ell":
-                                    linha = linha.encode('utf-8', 'ignore').decode('utf-8')
-                                textobject.textLine(linha)
+                                if linha.strip():
+                                    textobject.textLine(linha.strip())
                         
                         c.drawText(textobject)
                         if i < total_paginas - 1:
@@ -149,11 +154,11 @@ if arquivo_pdf is not None:
                 c.save()
 
                 with open(caminho_saida, "rb") as f:
-                    st.success("🎉 Processamento concluído com acentos e pontuações preservados!")
+                    st.success("🎉 Processamento concluído com tipografia Unicode ajustada!")
                     st.download_button(
                         label="📥 Baixar PDF Corrigido",
                         data=f,
-                        file_name="pdf_remodelado_perfeito.pdf",
+                        file_name="pdf_remodelado_final.pdf",
                         mime="application/pdf"
                     )
 
