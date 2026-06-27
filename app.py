@@ -12,31 +12,27 @@ import os
 st.set_page_config(page_title="Processador Inteligente de PDFs", page_icon="📚", layout="centered")
 
 st.title("📚 Processador e Reformatador Inteligente de PDFs")
-st.write("Versão Híbrida Estabilizada com Tratamento de Fontes Universais.")
+st.write("Versão Híbrida Estabilizada com Suporte a Fontes Customizadas do Repositório.")
 
-# --- FUNÇÃO CORRIGIDA DE CHECAGEM DE FONTE UNICODE ---
+# --- FUNÇÃO DE CARREGAMENTO DA SUA FONTE DO REPOSITÓRIO ---
 def obter_fonte_apropriada(codigo_idioma):
-    """Retorna uma fonte válida registrada ou uma fonte padrão segura do sistema"""
+    """Retorna a fonte Courier para tabelas latinas ou a fonte customizada para o Grego"""
     if codigo_idioma != "ell":
-        return "Courier" # Padrão excelente para manter o alinhamento de tabelas latinas
+        return "Courier"
         
-    # Se for Grego, tentamos mapear caminhos reais de fontes Unicode do sistema
-    caminhos_fontes = [
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "C:\\Windows\\Fonts\\arial.ttf" # Windows Local
-    ]
+    # Nome do arquivo que você vai subir no seu GitHub
+    arquivo_fonte_customizada = "fonte_grega.ttf"
     
-    for caminho in caminhos_fontes:
-        if os.path.exists(caminho):
-            try:
-                # Registra dinamicamente com um nome único para evitar conflitos
-                pdfmetrics.registerFont(TTFont('SistemaUnicode', caminho))
-                return 'SistemaUnicode'
-            except:
-                continue
-                
-    # Se o servidor não tiver nenhuma fonte instalada no sistema, usa o fallback padrão do ReportLab
+    if os.path.exists(arquivo_fonte_customizada):
+        try:
+            # Registra a fonte que você subiu
+            pdfmetrics.registerFont(TTFont('FonteGregaCustom', arquivo_fonte_customizada))
+            return 'FonteGregaCustom'
+        except Exception as e:
+            st.error(f"Erro ao carregar o arquivo '{arquivo_fonte_customizada}': {e}")
+            
+    # Fallback caso você esqueça de subir o arquivo ou o nome esteja diferente
+    st.warning(f"⚠️ Arquivo '{arquivo_fonte_customizada}' não encontrado no repositório. Usando fonte padrão.")
     return "Times-Roman"
 
 modo = st.radio(
@@ -63,7 +59,7 @@ if arquivo_pdf is not None:
             try:
                 c = canvas.Canvas(caminho_saida)
                 
-                # Obtém a fonte de forma dinâmica e segura baseada no idioma selecionado
+                # Obtém a fonte do repositório ou o padrão seguro
                 fonte_aplicada = obter_fonte_apropriada(codigo_idioma)
                 
                 # --- MODO 1: DIGITAL NATIVO ---
@@ -92,6 +88,7 @@ if arquivo_pdf is not None:
                         textobject.setFont(fonte_aplicada, 9)
                         textobject.setLeading(14)
                         
+                        # Extração inteligente por blocos
                         blocos = pagina.get_text("blocks")
                         blocos.sort(key=lambda b: (b[1], b[0])) 
                         
@@ -152,7 +149,7 @@ if arquivo_pdf is not None:
                 c.save()
 
                 with open(caminho_saida, "rb") as f:
-                    st.success("🎉 Processamento concluído com estabilização tipográfica!")
+                    st.success("🎉 Processamento concluído!")
                     st.download_button(
                         label="📥 Baixar PDF Corrigido",
                         data=f,
