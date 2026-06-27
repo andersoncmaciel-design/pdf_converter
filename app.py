@@ -36,15 +36,32 @@ if arquivo_pdf is not None:
             try:
                 c = canvas.Canvas(caminho_saida)
                 
-                # --- MODO 1: DIGITAL NATIVO ---
+                # --- MODO 1: DIGITAL NATIVO (COM SUPORTE A FONTES UNICODE/GREGO) ---
                 if modo == "PDF Digital Nativo (Limpar Layout Feio)":
-                    st.info("🤖 Analisando estrutura nativa e preservando acentuação...")
+                    st.info("🤖 Analisando estrutura nativa (Processamento Unicode Avançado)...")
+                    
+                    # 1. REGISTRAR FONTE UNICODE EXTERNA (Crucial para Grego)
+                    # Tentamos carregar uma fonte que suporte caracteres não-latinos.
+                    # Se você rodar localmente no Windows, pode usar 'arial.ttf'. 
+                    # Na nuvem (Linux), usaremos uma fonte padrão do sistema ou uma baixada na mesma pasta.
+                    from reportlab.pdfbase import pdfmetrics
+                    from reportlab.pdfbase.ttfonts import TTFont
+                    
+                    try:
+                        # Se você colocar o arquivo 'DejaVuSans.ttf' ou 'Arial.ttf' na mesma pasta do script, ele usa aqui.
+                        # Caso contrário, tentará buscar no sistema operacional.
+                        pdfmetrics.registerFont(TTFont('UnicodeFont', 'DejaVuSans.ttf'))
+                        fonte_final = 'UnicodeFont'
+                    except:
+                        # Fallback seguro caso não ache a fonte externa (avisa na interface)
+                        st.warning("⚠️ Nota: Para renderizar o Grego perfeitamente na nuvem, adicione o arquivo 'DejaVuSans.ttf' na pasta do projeto.")
+                        fonte_final = "Times-Roman" if codigo_idioma == "ell" else "Courier"
+
                     doc = fitz.open(caminho_entrada)
                     total_paginas = len(doc)
                     barra_progresso = st.progress(0)
 
                     for i, pagina in enumerate(doc):
-                        # Detecção de orientação
                         rect = pagina.rect
                         e_paisagem = rect.width > rect.height
                         
@@ -55,27 +72,27 @@ if arquivo_pdf is not None:
                             c.setPageSize(letter)
                             largura, altura = letter
                         
-                        # Chaveamento de fontes com suporte a caracteres latinos acentuados
-                        fonte = "Times-Roman" if codigo_idioma == "ell" else "Courier"
-                        
-                        texto_extraido = pagina.get_text("text")
-                        
                         # Moldura sutil
                         c.setStrokeColorRGB(0.8, 0.8, 0.8)
-                        c.setLineWidth(1)
                         c.rect(30, 30, largura - 60, altura - 60)
                         
                         textobject = c.beginText()
                         textobject.setTextOrigin(40, altura - 50)
-                        textobject.setFont(fonte, 9)
-                        textobject.setLeading(12)
+                        textobject.setFont(fonte_final, 9)
+                        textobject.setLeading(14) # Aumentado o espaçamento para melhor leitura de parágrafos
                         
-                        for linha in texto_extraido.split('\n'):
-                            # REMOVIDO o filtro .encode('ascii', 'ignore') para preservar os acentos e cedilhas nativos.
-                            # Usamos latin-1 apenas para assegurar compatibilidade de escape no ReportLab standard se não for Grego
-                            if codigo_idioma != "ell":
-                                linha = linha.encode('utf-8', 'ignore').decode('utf-8')
-                            textobject.textLine(linha)
+                        # MUDANÇA CHAVE: Extração por blocos estruturados (limpa o OCR quebrado de fundo)
+                        blocos = pagina.get_text("blocks")
+                        # Ordena os blocos de cima para baixo, da esquerda para a direita
+                        blocos.sort(key=lambda b: (b[1], b[0])) 
+                        
+                        for bloco in blocos:
+                            texto_bloco = bloco[4] # O texto bruto do parágrafo fica na posição 4
+                            
+                            for linha in texto_bloco.split('\n'):
+                                if linha.strip():
+                                    # Para o Grego rodar perfeitamente, NUNCA mude para ascii
+                                    textobject.textLine(linha.strip())
                         
                         c.drawText(textobject)
                         if i < total_paginas - 1:
