@@ -53,12 +53,6 @@ def registrar_fonte_unicode_sistema():
     # 3. Se tudo falhar miseravelmente, usa a nativa (mas o grego pode quebrar)
     return "Helvetica"
 
-# Inicializa a fonte de forma segura
-FONTE_UNICODE = registrar_fonte_unicode_sistema()
-
-# Garante que a fonte está pronta para o ReportLab usar
-FONTE_UNICODE = baixar_e_registrar_fonte_unicode()
-
 modo = st.radio(
     "Selecione o tipo do seu PDF de entrada:",
     ("PDF Digital Nativo (Limpar Layout Feio)", "PDF Escaneado/Imagem (Aplicar OCR)")
