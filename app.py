@@ -16,26 +16,45 @@ st.title("📚 Processador e Reformatador Inteligente de PDFs")
 st.write("Versão Híbrida Profissional com Suporte Automatizado a Fontes Gregas e Internacionais.")
 
 # --- FUNÇÃO PARA INSTALAR A FONTE GREGA AUTOMATICAMENTE ---
+# --- FUNÇÃO PARA REGISTRAR A FONTE UNICODE DO SISTEMA ---
 @st.cache_resource
-def baixar_e_registrar_fonte_unicode():
-    """Baixa a fonte DejaVuSans (suporta Grego, Acentos e Símbolos) e registra no sistema"""
-    nome_fonte = "DejaVuSans.ttf"
-    # URL confiável da fonte open-source DejaVu Sans
-    url_fonte = "https://github.com/matthieam/reportlab/raw/master/src/reportlab/fonts/DejaVuSans.ttf"
+def registrar_fonte_unicode_sistema():
+    """Localiza e registra uma fonte com suporte a Grego nativa do sistema operacional"""
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
     
-    if not os.path.exists(nome_fonte):
+    # Caminhos padrão onde sistemas Linux (Streamlit Cloud) guardam fontes Unicode gratuitas
+    caminhos_linux = [
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf"
+    ]
+    
+    # Caminho padrão no Windows (caso esteja testando localmente)
+    caminho_windows = "C:\\Windows\\Fonts\\arial.ttf"
+    
+    # 1. Tenta no Linux (Servidor Nuvem)
+    for caminho in caminhos_linux:
+        if os.path.exists(caminho):
+            try:
+                pdfmetrics.registerFont(TTFont('UnicodeFont', caminho))
+                return 'UnicodeFont'
+            except:
+                continue
+                
+    # 2. Tenta no Windows (Local)
+    if os.path.exists(caminho_windows):
         try:
-            with st.spinner("📥 Instalando suporte a caracteres internacionais/grego no servidor..."):
-                urllib.request.urlretrieve(url_fonte, nome_fonte)
-        except Exception as e:
-            st.error(f"Erro ao baixar fonte internacional: {e}")
-            return "Helvetica" # Fallback se falhar a internet
-            
-    try:
-        pdfmetrics.registerFont(TTFont('DejaVuSans', nome_fonte))
-        return 'DejaVuSans'
-    except Exception as e:
-        return "Helvetica"
+            pdfmetrics.registerFont(TTFont('UnicodeFont', caminho_windows))
+            return 'UnicodeFont'
+        except:
+            pass
+
+    # 3. Se tudo falhar miseravelmente, usa a nativa (mas o grego pode quebrar)
+    return "Helvetica"
+
+# Inicializa a fonte de forma segura
+FONTE_UNICODE = registrar_fonte_unicode_sistema()
 
 # Garante que a fonte está pronta para o ReportLab usar
 FONTE_UNICODE = baixar_e_registrar_fonte_unicode()
