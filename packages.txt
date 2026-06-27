@@ -4,3 +4,4 @@ tesseract-ocr-por
 tesseract-ocr-eng
 tesseract-ocr-fra
 tesseract-ocr-ell
+fonts-liberation
