@@ -8,50 +8,36 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import tempfile
 import os
-import urllib.request
 
 st.set_page_config(page_title="Processador Inteligente de PDFs", page_icon="📚", layout="centered")
 
 st.title("📚 Processador e Reformatador Inteligente de PDFs")
-st.write("Versão Híbrida Profissional com Suporte Automatizado a Fontes Gregas e Internacionais.")
+st.write("Versão Híbrida Estabilizada com Tratamento de Fontes Universais.")
 
-# --- FUNÇÃO PARA INSTALAR A FONTE GREGA AUTOMATICAMENTE ---
-# --- FUNÇÃO PARA REGISTRAR A FONTE UNICODE DO SISTEMA ---
-@st.cache_resource
-def registrar_fonte_unicode_sistema():
-    """Localiza e registra uma fonte com suporte a Grego nativa do sistema operacional"""
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    
-    # Caminhos padrão onde sistemas Linux (Streamlit Cloud) guardam fontes Unicode gratuitas
-    caminhos_linux = [
+# --- FUNÇÃO CORRIGIDA DE CHECAGEM DE FONTE UNICODE ---
+def obter_fonte_apropriada(codigo_idioma):
+    """Retorna uma fonte válida registrada ou uma fonte padrão segura do sistema"""
+    if codigo_idioma != "ell":
+        return "Courier" # Padrão excelente para manter o alinhamento de tabelas latinas
+        
+    # Se for Grego, tentamos mapear caminhos reais de fontes Unicode do sistema
+    caminhos_fontes = [
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf"
+        "C:\\Windows\\Fonts\\arial.ttf" # Windows Local
     ]
     
-    # Caminho padrão no Windows (caso esteja testando localmente)
-    caminho_windows = "C:\\Windows\\Fonts\\arial.ttf"
-    
-    # 1. Tenta no Linux (Servidor Nuvem)
-    for caminho in caminhos_linux:
+    for caminho in caminhos_fontes:
         if os.path.exists(caminho):
             try:
-                pdfmetrics.registerFont(TTFont('UnicodeFont', caminho))
-                return 'UnicodeFont'
+                # Registra dinamicamente com um nome único para evitar conflitos
+                pdfmetrics.registerFont(TTFont('SistemaUnicode', caminho))
+                return 'SistemaUnicode'
             except:
                 continue
                 
-    # 2. Tenta no Windows (Local)
-    if os.path.exists(caminho_windows):
-        try:
-            pdfmetrics.registerFont(TTFont('UnicodeFont', caminho_windows))
-            return 'UnicodeFont'
-        except:
-            pass
-
-    # 3. Se tudo falhar miseravelmente, usa a nativa (mas o grego pode quebrar)
-    return "Helvetica"
+    # Se o servidor não tiver nenhuma fonte instalada no sistema, usa o fallback padrão do ReportLab
+    return "Times-Roman"
 
 modo = st.radio(
     "Selecione o tipo do seu PDF de entrada:",
@@ -77,8 +63,8 @@ if arquivo_pdf is not None:
             try:
                 c = canvas.Canvas(caminho_saida)
                 
-                # Definir a fonte base com base no idioma (Tabelas latinas usam Courier, Grego usa DejaVu)
-                fonte_aplicada = FONTE_UNICODE if codigo_idioma == "ell" else "Courier"
+                # Obtém a fonte de forma dinâmica e segura baseada no idioma selecionado
+                fonte_aplicada = obter_fonte_apropriada(codigo_idioma)
                 
                 # --- MODO 1: DIGITAL NATIVO ---
                 if modo == "PDF Digital Nativo (Limpar Layout Feio)":
@@ -106,7 +92,6 @@ if arquivo_pdf is not None:
                         textobject.setFont(fonte_aplicada, 9)
                         textobject.setLeading(14)
                         
-                        # Extração inteligente por blocos de texto (corrige as quebras do OCR antigo)
                         blocos = pagina.get_text("blocks")
                         blocos.sort(key=lambda b: (b[1], b[0])) 
                         
@@ -167,7 +152,7 @@ if arquivo_pdf is not None:
                 c.save()
 
                 with open(caminho_saida, "rb") as f:
-                    st.success("🎉 Processamento concluído com tipografia Unicode ajustada!")
+                    st.success("🎉 Processamento concluído com estabilização tipográfica!")
                     st.download_button(
                         label="📥 Baixar PDF Corrigido",
                         data=f,
@@ -176,7 +161,7 @@ if arquivo_pdf is not None:
                     )
 
             except Exception as e:
-                st.error(f"Erro: {e}")
+                st.error(f"Erro interno no processamento: {e}")
             finally:
                 if os.path.exists(caminho_entrada): os.remove(caminho_entrada)
                 if os.path.exists(caminho_saida): os.remove(caminho_saida)
